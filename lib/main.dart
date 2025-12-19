@@ -24,7 +24,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'StudyVault',
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue)),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.amberAccent),
+        scaffoldBackgroundColor: Colors.blueGrey
+      ),
       home: BlocProvider(
         create: (_) => DecksBloc(repo)..add(LoadDecks()),
         child: const DecksPage(),
