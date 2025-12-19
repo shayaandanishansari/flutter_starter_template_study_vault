@@ -1,0 +1,850 @@
+Flutter Mobile Dev – Exam Q&A Sheet
+(Covers PDFs + all given Flutter links)
+
+====================================================
+SECTION 1 – FLUTTER ARCHITECTURE & LAYERS
+====================================================
+
+Q1. What is Flutter’s layered architecture?
+A1.
+- Flutter is built in layers, each providing a different level of abstraction.
+- From top to bottom: App layer (your code), Framework – Widgets layer, Framework – Rendering layer, Engine layer, Embedder layer.
+- Higher layers are easier for humans to work with; lower layers are closer to the OS and hardware.
+
+Q2. What is the App layer in Flutter?
+A2.
+- This is your Dart code: widgets, screens, business logic.
+- You build a widget tree that describes “what” should be drawn, not “how”.
+- Example: you describe a 100×100 blue box using widgets.
+
+Q3. What is the Widgets layer responsible for?
+A3.
+- Contains high-level, reusable widgets (Container, Row, Column, Text, etc.).
+- Widgets are immutable configurations – they don’t draw anything directly.
+- Complex widgets (like Container) internally compose other widgets to describe layout and painting.
+
+Q4. What is the Rendering layer and what does a RenderObject do?
+A4.
+- The Rendering layer contains RenderObjects arranged in a render tree.
+- Each RenderObject:
+  - Lays out (decides size and position),
+  - Paints (draws onto a canvas),
+  - Hit-tests (detects taps/gestures).
+- Example: a Container may map to a RenderDecoratedBox that actually paints the background.
+
+Q5. What does the Engine layer do?
+A5.
+- Uses low-level libraries like Skia (C++) to turn drawing commands into pixels.
+- Receives a “Scene” (list of drawing operations) and rasterizes it to the screen.
+- Handles text layout, compositing, and GPU interaction.
+
+Q6. What is the Embedder layer in Flutter?
+A6.
+- Platform-specific code that connects Flutter to the underlying OS (Android, iOS, web, desktop).
+- Creates a window/view, forwards input events (touch, keyboard) to the framework.
+- Embeds the engine into the host app process.
+
+Q7. Walk through what happens when you display a 100×100 blue box using a Container.
+A7.
+- App layer: you write `Container(width: 100, height: 100, color: Colors.blue)`.
+- Widgets layer: Container creates internal widgets (e.g., ConstrainedBox, DecoratedBox, Align) to describe layout and painting.
+- Rendering layer: those widgets correspond to RenderObjects (e.g., RenderDecoratedBox) that compute layout and paint a blue rectangle.
+- Engine: builds a Scene with a draw-rectangle command.
+- Embedder: shows the rendered pixels in a platform window.
+
+====================================================
+SECTION 2 – WIDGETS & LIFECYCLE
+====================================================
+
+Q8. What is a widget in Flutter?
+A8.
+- A widget is an immutable configuration of part of the UI.
+- It describes what the UI should look like given the current state.
+- Flutter rebuilds widgets when state changes.
+
+Q9. What is the difference between StatelessWidget and StatefulWidget?
+A9.
+- StatelessWidget:
+  - Has no internal mutable state.
+  - `build()` depends only on constructor parameters and inherited data.
+  - Use for static UI or UI controlled entirely by external state.
+- StatefulWidget:
+  - Has a separate State object that holds mutable state.
+  - Can change over time (e.g., via `setState()`).
+  - Use when UI depends on changing data (animations, counters, form inputs, etc.).
+
+Q10. List the main lifecycle methods of a StatefulWidget’s State object.
+A10.
+- `createState()` (on the widget, not State)
+- `initState()`
+- `didChangeDependencies()`
+- `build()`
+- `didUpdateWidget()`
+- `setState()`
+- `deactivate()`
+- `dispose()`
+
+Q11. When is `initState()` called and what is it used for?
+A11.
+- Called once when the State object is first created.
+- Use it to:
+  - Initialize state variables.
+  - Start animations, timers, or open streams.
+  - Make one-time initializations that depend only on the State object.
+- Do NOT call `BuildContext.dependOnInheritedWidgetOfExactType` from here (use `didChangeDependencies` instead).
+
+Q12. What is `didChangeDependencies()` and when does it run?
+A12.
+- Called after `initState()` and whenever an inherited widget it depends on changes.
+- Use it to:
+  - Respond to changes in dependencies like `InheritedWidget`, `Provider`, `MediaQuery`, `Theme`, etc.
+- Can be called multiple times during the life of the State.
+
+Q13. When is `didUpdateWidget()` called and why would you override it?
+A13.
+- Called when the parent rebuilds and supplies a new instance of the same widget type.
+- Use it to:
+  - React when widget configuration (e.g., constructor parameters) changes.
+  - Update internal state based on new widget properties.
+
+Q14. What does the `build()` method do in a StatefulWidget?
+A14.
+- Describes the part of the UI represented by this widget.
+- It can be called frequently; it must be:
+  - Fast and side-effect free (no heavy work).
+  - Pure: only reads state and returns a widget tree.
+
+Q15. What is `setState()` and when should you use it?
+A15.
+- Notifies Flutter that the internal state of this object has changed.
+- Flutter schedules a rebuild and calls `build()` again.
+- Use it only when:
+  - You mutate state variables inside the callback.
+  - The changes affect what `build()` returns.
+- Don’t do heavy work inside `setState`; just update state and let `build()` reflect it.
+
+Q16. What is the purpose of `deactivate()` and `dispose()`?
+A16.
+- `deactivate()`:
+  - Called when the State is removed from the tree but might be reinserted later.
+  - Rarely overridden; mostly for advanced use.
+- `dispose()`:
+  - Called when the State is permanently removed.
+  - Use it to cancel timers, close streams, dispose controllers, and free resources.
+
+Q17. Does a StatelessWidget have a lifecycle similar to StatefulWidget?
+A17.
+- Not in the same way.
+- It has only `build()` (no separate State object).
+- A new StatelessWidget instance is simply created and built when needed; internal data cannot change over time.
+
+====================================================
+SECTION 3 – STATE & STATE MANAGEMENT
+====================================================
+
+Q18. What does it mean that Flutter is “declarative”?
+A18.
+- You declare what the UI should look like for a given state.
+- When state changes, Flutter rebuilds the UI tree.
+- You don’t imperatively change specific pixels; you rebuild widgets based on new state.
+
+Q19. What is “state” in Flutter?
+A19.
+- Any data that can change during the lifetime of a widget.
+- When it changes, the UI needs to update.
+- Examples: current tab index, form input values, user login status, theme mode, cart items.
+
+Q20. What is ephemeral (local) state? Give examples.
+A20.
+- Short-lived state that is only relevant to a single widget or small subtree.
+- Can be managed using `StatefulWidget` + `setState`.
+- Examples: currently selected tab index on a bottom nav bar, a checkbox’s value, a text field error flag.
+
+Q21. What is application (shared) state? Give examples.
+A21.
+- State that:
+  - Is needed across many parts of the app.
+  - Often must persist across sessions.
+- Examples: logged-in user profile, authentication token, app-wide theme, notification count, shopping cart.
+
+Q22. Why is there “no clear-cut rule” for deciding how to manage state?
+A22.
+- Real apps vary in complexity.
+- Some state is easier with local `setState`, some with Provider/BLoC.
+- Rule of thumb: choose the technique that makes code simpler, clearer, and less awkward for that situation.
+
+Q23. Why do we use architectural patterns (like Provider or BLoC) for state?
+A23.
+- To make apps:
+  - Easier to maintain and test.
+  - More scalable for teams.
+- They separate UI from business logic.
+- They avoid deeply nested `setState` and prop-drilling.
+
+Q24. What is the Provider pattern in Flutter?
+A24.
+- Implementation of the observer pattern.
+- A “Notifier” exposes state and notifies listeners when it changes.
+- “Provider” makes this Notifier available in the widget tree.
+- “Consumer” listens to changes and rebuilds only the necessary widgets.
+
+Q25. Explain the three core concepts: Notifier, Provider, Consumer.
+A25.
+- Notifier:
+  - Class (e.g., `ChangeNotifier`) that holds state and calls `notifyListeners()` when it changes.
+- Provider:
+  - Widget that exposes a Notifier instance to its descendants using InheritedWidget-like behavior.
+- Consumer:
+  - Widget that listens to the provider and rebuilds when the Notifier changes.
+
+Q26. What is reactive programming in Flutter?
+A26.
+- Programming style where changes in data automatically propagate to where they’re used.
+- Often implemented with Streams and async APIs.
+- Use `Stream`, `async*`, `yield`, and widgets like `StreamBuilder`.
+
+Q27. What is BLoC (Business Logic Component)?
+A27.
+- A pattern where:
+  - UI sends “events” into the BLoC.
+  - BLoC processes events and outputs “states” via streams.
+- Business logic is separated from widgets.
+- Common concepts: Event, State, Bloc, BlocBuilder, Repository.
+
+Q28. What is the role of a Repository in BLoC-style architectures?
+A28.
+- Encapsulates data access (network, database, cache).
+- Provides a clean API for the BLoC to get and update data.
+- Helps keep BLoC logic independent from data source details.
+
+Q29. Briefly compare Provider and BLoC.
+A29.
+- Provider:
+  - Simpler, lighter, great for small–medium apps.
+  - Uses ChangeNotifier + listeners.
+- BLoC:
+  - More structured; uses streams, events, and states.
+  - Often better for large apps with complex flows and explicit state transitions.
+
+====================================================
+SECTION 4 – PACKAGES & PLUGINS
+====================================================
+
+Q30. What is a Dart package in Flutter?
+A30.
+- A reusable unit of Dart code with a `pubspec.yaml`.
+- Can contain libraries, assets, tests, and examples.
+- Used to share code across projects or with the community (via pub.dev).
+
+Q31. How do you create a new Dart package with Flutter?
+A31.
+- Run: `flutter create --template=package package_name`
+- This generates:
+  - `lib/` with main library file,
+  - `test/` for tests,
+  - `pubspec.yaml` for metadata and dependencies.
+
+Q32. What is a plugin package in Flutter?
+A32.
+- A special type of package that exposes platform-specific functionality to Dart.
+- Contains platform-specific code (Android, iOS, web, desktop) plus a Dart API.
+- Used for things like camera, sensors, battery, etc.
+
+Q33. When should you create a plugin instead of a pure Dart package?
+A33.
+- When you need access to native platform APIs (camera, GPS, sensors, storage, etc.).
+- If all your logic can be written in pure Dart with no platform calls, use a Dart package.
+
+Q34. Which languages are typically used to implement plugin code on Android and iOS?
+A34.
+- Android: Kotlin or Java.
+- iOS: Swift or Objective-C.
+- Other platforms: platform-specific languages (C++/Objective-C for macOS, C++ for Windows, etc.).
+
+Q35. What is a federated plugin?
+A35.
+- A plugin split into multiple packages:
+  - An app-facing package (what the app depends on),
+  - One platform package per platform (android, ios, web, etc.),
+  - An optional platform interface package defining the common API.
+- Allows different platform implementations to evolve independently.
+
+Q36. What is an FFI plugin package?
+A36.
+- A plugin that uses Dart FFI to call native code directly (e.g., C/C++).
+- Useful for performance-sensitive or existing native libraries.
+- Structure includes steps: build native library, bind with FFI, call from Dart.
+
+Q37. What steps are involved in publishing a package to pub.dev (high level)?
+A37.
+- Add proper `name`, `description`, `version`, `homepage`, `license` to `pubspec.yaml`.
+- Add meaningful documentation and examples.
+- Run `flutter test` / `dart test` and `dart format`.
+- Ensure there’s a valid LICENSE file.
+- Use `dart pub publish` or `flutter pub publish`.
+
+Q38. Why is good documentation important for a package?
+A38.
+- Helps others understand how to use it.
+- Increases adoption and reduces support questions.
+- Often required or strongly encouraged by pub.dev quality metrics.
+
+Q39. What are “package interdependencies” in plugin development?
+A39.
+- How different platform or implementation packages depend on each other.
+- You may have:
+  - An interface package that app-facing and platform packages depend on,
+  - Platform-specific implementation packages registered as endorsed implementations.
+
+====================================================
+SECTION 5 – PERSISTENCE & STORAGE
+====================================================
+
+Q40. What is data persistence in Flutter and why is it important?
+A40.
+- Persistence means saving data across app restarts.
+- Important for user experience: users expect preferences, login state, and app data to survive closing the app.
+
+Q41. What is `SharedPreferences` and when is it typically used?
+A41.
+- A key–value storage solution for small pieces of simple data.
+- Stored on disk in a platform-specific way.
+- Typically used for non-sensitive preferences like theme, language selection, or simple flags.
+
+Q42. Why is `SharedPreferences` not suitable for sensitive data?
+A42.
+- Data is stored in plain text or easily accessible formats on the device.
+- Anyone with access to the device filesystem or a rooted phone could read it.
+- Not encrypted by default.
+
+Q43. When would you use file I/O for persistence in Flutter?
+A43.
+- When you want to read/write structured or unstructured files yourself (e.g., JSON configs, text notes, exports).
+- Gives you full control over file structure and location (within app sandbox).
+
+Q44. When should you use SQLite in a Flutter app?
+A44.
+- When you need:
+  - Relational data,
+  - Complex queries,
+  - Joins, indexes, and efficient filtering.
+- Example: note-taking apps, offline caches, local databases.
+
+Q45. What is Hive and why is it popular in Flutter?
+A45.
+- Hive is a lightweight, fast NoSQL database for Flutter.
+- Stores data as key–value boxes but supports typed objects.
+- Can be combined with encryption for secure persistence.
+
+Q46. What is `flutter_secure_storage`?
+A46.
+- A package that stores key–value pairs in the platform’s secure storage:
+  - Keychain on iOS,
+  - Keystore on Android.
+- Designed for sensitive data like tokens, passwords, and secrets.
+
+Q47. Compare `SharedPreferences`, `flutter_secure_storage`, SQLite, and Hive briefly.
+A47.
+- SharedPreferences:
+  - Simple key–value, not secure, small data.
+- flutter_secure_storage:
+  - Key–value, encrypted, ideal for secrets.
+- SQLite:
+  - Structured relational DB, good for complex queries and larger datasets.
+- Hive:
+  - Fast key–value / object store, great for local data; can be encrypted.
+
+====================================================
+SECTION 6 – TESTING
+====================================================
+
+Q48. Why is automated testing important in Flutter?
+A48.
+- Ensures app behavior is correct as code changes.
+- Reduces regressions and manual testing effort.
+- Improves confidence when refactoring and adding features.
+
+Q49. What is a unit test in Flutter?
+A49.
+- Tests a single function, method, or class in isolation.
+- No UI, no disk, no network (dependencies are mocked or faked).
+- Very fast to run and easy to maintain.
+
+Q50. What is a widget test?
+A50.
+- Tests a single widget’s UI and interaction.
+- Renders the widget in a lightweight test environment.
+- Can pump frames, simulate taps, and verify widget tree contents.
+
+Q51. What is an integration test?
+A51.
+- Tests a full app or a large part of it on a real device/emulator.
+- Also called end-to-end or GUI testing.
+- Simulates real user flows (launch app, tap buttons, fill forms, etc.).
+
+Q52. Compare unit, widget, and integration tests by scope and speed.
+A52.
+- Unit tests:
+  - Smallest scope, fastest, lowest maintenance cost.
+- Widget tests:
+  - Medium scope, slower than unit tests, good balance of coverage and speed.
+- Integration tests:
+  - Largest scope, slowest, highest maintenance cost but highest confidence for user flows.
+
+Q53. Give an example of something you would test with a unit test in Flutter.
+A53.
+- Business logic like:
+  - A function that calculates discounts,
+  - A validator for email/password,
+  - A repository method that merges or parses data.
+
+Q54. Give an example of something you would test with a widget test.
+A54.
+- A login form widget:
+  - Entering email/password,
+  - Tapping “Login” button,
+  - Checking if error messages or navigation happens correctly.
+
+Q55. Give an example of something you would test with an integration test.
+A55.
+- Full user flow:
+  - Launch app,
+  - Login,
+  - Navigate through several screens,
+  - Add an item to cart,
+  - Check out.
+
+Q56. What is the `flutter_test` package used for?
+A56.
+- Provides APIs for writing unit and widget tests.
+- Includes `testWidgets`, `pumpWidget`, `find`, `expect`, and utilities to simulate user interaction.
+
+Q57. How does Continuous Integration (CI) relate to testing?
+A57.
+- CI automatically runs tests on each commit or merge.
+- Ensures that tests pass before code is integrated.
+- Helps catch bugs early and maintain code quality.
+
+====================================================
+SECTION 7 – APP ARCHITECTURE CONCEPTS
+====================================================
+
+Q58. What is “separation of concerns” in app architecture?
+A58.
+- Each part of the codebase is responsible for a specific concern (UI, business logic, data access).
+- Reduces coupling, makes the app easier to understand and maintain.
+- In Flutter: keep widgets focused on presentation; move logic to separate classes/layers.
+
+Q59. What are the typical high-level layers in a Flutter app architecture?
+A59.
+- UI (presentation) layer:
+  - Widgets and view logic.
+- Logic/domain layer (optional but common):
+  - Use-cases, BLoCs, controllers, providers.
+- Data layer:
+  - Repositories, API clients, local databases.
+
+Q60. What is a “single source of truth” (SSOT) for data?
+A60.
+- A single place that owns and manages a particular piece of data.
+- All reads come from it; all writes go through it.
+- Prevents inconsistent or duplicated state across the app.
+
+Q61. What is unidirectional data flow?
+A61.
+- Data/state flows in one direction (data → logic → UI).
+- User events flow back in the opposite direction (UI → logic → data).
+- Makes it easier to track how changes propagate and to debug.
+
+Q62. How does unidirectional data flow help in Flutter apps?
+A62.
+- Reduces accidental circular dependencies.
+- Makes it clear where state updates originate.
+- Encourages pure UI that reacts to state instead of mutating it randomly.
+
+Q63. Why is it beneficial to treat UI as a function of immutable state?
+A63.
+- Immutable state is easier to reason about and test.
+- Less likely to have bugs from unexpected mutations.
+- Flutter can efficiently rebuild widgets whenever a new state object is produced.
+
+Q64. Why does architecture become more important as the team and codebase grow?
+A64.
+- More developers and features mean more chances of conflicts and messy code.
+- A clear architecture:
+  - Makes responsibilities obvious,
+  - Reduces merge conflicts,
+  - Simplifies onboarding,
+  - Improves testability.
+
+Q65. How does a layered architecture improve testability?
+A65.
+- You can test each layer in isolation:
+  - Data layer with fake APIs/DBs,
+  - Logic layer with mocked repositories,
+  - UI layer with widget tests.
+- Fewer hidden dependencies and side effects.
+
+====================================================
+SECTION 8 – PERFORMANCE BEST PRACTICES
+====================================================
+
+Q66. Why do we care about performance in Flutter if it is already fast?
+A66.
+- Bad patterns (expensive builds, unnecessary work) can still cause jank.
+- Users expect smooth 60/120 FPS experiences.
+- Performance issues often appear on lower-end devices first.
+
+Q67. What does it mean to “control build() cost”?
+A67.
+- Make sure `build()` is fast and does minimal work.
+- Avoid heavy computations, large loops, or blocking operations inside `build()`.
+- Break big widgets into smaller ones so only parts that need to change rebuild.
+
+Q68. How can `const` widgets improve performance?
+A68.
+- `const` widgets are created at compile time and reused.
+- Flutter can skip rebuilding them because it knows they don’t change.
+- Reduces object allocations and rebuild overhead.
+
+Q69. Why is `ListView.builder` preferred over `ListView(children: [...])` for large lists?
+A69.
+- `ListView.builder` builds items lazily on demand.
+- For large lists, building all children at once is expensive and memory-heavy.
+- Lazy building avoids unnecessary work and improves scroll performance.
+
+Q70. Why are `saveLayer()` operations expensive?
+A70.
+- `saveLayer()` creates an offscreen buffer and draws content twice (into the layer, then onto the screen).
+- This increases GPU and CPU usage.
+- Should be used only when necessary for effects like complex blending.
+
+Q71. Why should we minimize use of the `Opacity` widget?
+A71.
+- Opacity often forces compositing and offscreen drawing, which is expensive.
+- For simple shapes or text, it’s often faster to use a semi-transparent color instead.
+- Too many Opacity widgets can cause jank.
+
+Q72. What is “jank” in a Flutter app?
+A72.
+- Visible stuttering or skipping frames.
+- Happens when frame rendering takes longer than the frame budget (usually 16ms at 60 FPS).
+
+Q73. How can you avoid doing heavy work on the UI thread?
+A73.
+- Move heavy computations to:
+  - Isolates (compute),
+  - Backend services,
+  - Pre-calculate results before building.
+- Avoid long synchronous operations in build, initState, or event handlers.
+
+Q74. What tools can you use to diagnose performance issues in Flutter?
+A74.
+- Flutter DevTools Performance view:
+  - Frame chart, timeline, and frame analysis.
+- Profile and release builds to see real performance.
+- Logs and tracing when needed.
+
+Q75. Give three general performance best practices in Flutter.
+A75.
+- Avoid rebuilding large parts of the widget tree unnecessarily (localize `setState`).
+- Use const constructors and small, reusable widgets.
+- Limit use of Opacity, clipping, and saveLayer; only use them when required.
+
+====================================================
+SECTION 9 – SECURITY IN FLUTTER
+====================================================
+
+Q76. Why is security important in mobile apps, and what is the CIA triad?
+A76.
+- Mobile apps often handle sensitive data (personal info, tokens, payments).
+- CIA triad:
+  - Confidentiality: only authorized parties can access data.
+  - Integrity: data is accurate and not tampered with.
+  - Availability: systems and data are accessible when needed.
+
+Q77. List some common security threats in Flutter/mobile apps.
+A77.
+- Insecure local storage of sensitive data.
+- Weak or missing authentication/authorization.
+- Network sniffing / man-in-the-middle (MITM) attacks.
+- Reverse engineering and tampering with the app.
+- Leaked API keys or secrets in source code or builds.
+
+Q78. What does “Never trust the client” mean in the context of app security?
+A78.
+- Assume the app and device can be compromised or modified.
+- Backend must:
+  - Validate all inputs,
+  - Enforce authorization and rate limits,
+  - Not rely on flags like `isAdmin` sent from client.
+
+Q79. Why is storing tokens or passwords in `SharedPreferences` unsafe?
+A79.
+- Data is stored in plain or easily readable form.
+- On rooted/jailbroken devices, attackers can read these files.
+- Tokens can be stolen and reused for session hijacking.
+
+Q80. What is `flutter_secure_storage` and why is it safer?
+A80.
+- Stores key–value pairs in secure OS-provided storage:
+  - Keychain (iOS),
+  - Keystore (Android).
+- Data is encrypted and protected by the OS, often hardware-backed.
+
+Q81. How can Hive be used securely for data storage?
+A81.
+- Combine Hive with AES encryption.
+- Use an encryption key that isn’t hardcoded in plain text.
+- Store only necessary data; avoid secrets if possible.
+
+Q82. Why should you avoid storing JWTs, passwords, or API keys on the client if possible?
+A82.
+- Any secret stored on the client can potentially be extracted.
+- Tokens can be abused if stolen.
+- Server-side secrets (like API keys to third-party services) should never be in the client binary.
+
+Q83. Does Flutter provide encryption APIs by default? If not, what can you use?
+A83.
+- Flutter/Dart doesn’t include high-level encryption APIs by default.
+- Common choices:
+  - `encrypt` package for AES/RSA operations.
+  - `pointycastle` for advanced cryptography.
+
+Q84. What are best practices for managing encryption keys in a Flutter app?
+A84.
+- Never hardcode keys directly in code.
+- Derive keys from user input or secure backend responses when possible.
+- Store derived keys or tokens in secure storage.
+- Rotate keys periodically and revoke compromised keys.
+
+Q85. What is OAuth 2.0 and how is it commonly used in mobile apps?
+A85.
+- An authorization framework for delegated access.
+- Common use:
+  - User signs in via OAuth provider.
+  - App gets access token (and maybe refresh token) to call APIs on behalf of the user.
+
+Q86. What is a JWT (JSON Web Token) and why should it have an expiry?
+A86.
+- A compact token format that encodes claims (like user ID, roles).
+- Signed by the server to prevent tampering.
+- Expiry (short-lived) limits the window of misuse if the token is stolen.
+
+Q87. Where should refresh tokens be stored and how should the backend enforce roles?
+A87.
+- Refresh tokens:
+  - Stored securely on the client (e.g., `flutter_secure_storage`) if you must store them.
+- Roles:
+  - Enforced on the backend, not on the client.
+  - Do not rely on client-provided “isAdmin” flags.
+
+Q88. What is HTTPS and why is it mandatory for secure communication?
+A88.
+- HTTPS = HTTP over TLS (encrypted connection).
+- Encrypts data in transit, prevents easy eavesdropping or modification.
+- Critical for protecting credentials, tokens, and personal data.
+
+Q89. What is SSL (certificate) pinning and what problem does it solve?
+A89.
+- Technique where the app only trusts a specific server certificate or public key.
+- Prevents MITM attacks even if a device’s root CA store is compromised.
+- App compares the server certificate to a pinned cert/key before trusting the connection.
+
+Q90. What kind of build/code-level measures can you take to protect against reverse engineering?
+A90.
+- Obfuscate Dart code in release builds (`--obfuscate --split-debug-info`).
+- Enable ProGuard/R8 for Android.
+- Avoid including secrets directly in code or resources.
+- Use minimal debug info in release builds.
+
+Q91. What are some app integrity checks you can implement?
+A91.
+- Check if the device is rooted/jailbroken and limit functionality on such devices.
+- Use Firebase App Check / Play Integrity API / SafetyNet to verify app origin.
+- Verify app signature at runtime to detect repackaged APKs.
+
+Q92. Give examples of secure coding best practices in Flutter.
+A92.
+- Validate and sanitize all user input.
+- Avoid dynamic code loading or evaluation.
+- Use const constructors and immutable data where possible.
+- Don’t log sensitive data (tokens, passwords).
+- Keep secrets out of source control.
+
+Q93. Describe the “Food Delivery App” token storage issue and its fix (from the case study).
+A93.
+- Problem:
+  - Tokens stored in SharedPreferences → easily stolen → session hijacking.
+- Fix:
+  - Use secure storage for tokens.
+  - Implement JWT refresh flow.
+  - Add SSL pinning and enable obfuscation.
+- Result:
+  - Reduced session theft and API abuse.
+
+Q94. Why is “Security is a lifecycle, not a one-time feature” an important idea?
+A94.
+- New vulnerabilities, libraries, and attacks appear over time.
+- Apps need regular:
+  - Dependency updates,
+  - Security tests,
+  - CI/CD reviews.
+- Security must be continuously maintained, not just added once.
+
+Q95. Explain the quote: “Your app is only as secure as your weakest endpoint.”
+A95.
+- Attackers target the easiest path.
+- If any endpoint or layer (storage, network, API, CI/CD) is weak, the entire system can be compromised.
+- You must secure all layers: client, network, server, and pipeline.
+
+====================================================
+SECTION 10 – CI/CD, SECRETS & DEPLOYMENT SECURITY
+====================================================
+
+Q96. Why is it dangerous to store API keys or secrets directly in a Git repository?
+A96.
+- Repos often get cloned, shared, or leaked.
+- Secrets in history are hard to fully remove.
+- Attackers can scan public repos for keys and abuse your services.
+
+Q97. How should secrets be managed in CI/CD pipelines?
+A97.
+- Use secret managers or encrypted environment variables (e.g., GitHub Secrets).
+- Do not hardcode secrets in build scripts.
+- Give least privilege: each secret only has the minimal access needed.
+
+Q98. What security-related steps can be automated in CI/CD?
+A98.
+- Static analysis / linting with security rules.
+- Running tests (including security tests).
+- Enabling obfuscation for release builds.
+- Checking for vulnerable dependencies.
+- Ensuring signing keys are applied only in secure, controlled environments.
+
+Q99. What does it mean to “sign” a release build of an Android app?
+A99.
+- Use a private keystore (.jks) to sign the APK/AAB.
+- The signature proves that the app came from you and hasn’t been tampered with.
+- Users and stores (Play Store) trust updates only if they’re signed with the same key.
+
+Q100. How should you protect your keystore file and signing keys?
+A100.
+- Store the keystore and passwords securely (password manager, secret storage).
+- Never commit the keystore to source control.
+- Limit who has access and keep backups in secure locations.
+
+Q101. Why is it important to verify store certificates (Play Store / App Store) when releasing?
+A101.
+- Ensures users download the authentic, untampered app from trusted stores.
+- Prevents attackers from distributing fake versions of your app via untrusted channels under your name.
+
+
+ADD-ON QUESTIONS (Q102–Q116)
+
+Q102. What is the difference between Future and Stream in Flutter/Dart?
+A102.
+Future: one-time async result (success/error) in the future.
+Stream: multiple async events over time (0..n values).
+Example:
+Future → fetch data once from API.
+Stream → live sensor updates / chat messages.
+
+Q103. When should you use FutureBuilder vs StreamBuilder?
+A103.
+Use FutureBuilder when data loads once (or on refresh).
+Use StreamBuilder when UI must update continuously with new events.
+In both: handle states explicitly:
+loading (ConnectionState.waiting)
+error (snapshot.hasError)
+data (snapshot.hasData)
+
+Q104. Explain Flutter’s Navigator (push/pop) using the stack model.
+A104.
+Flutter navigation is typically a stack of routes/screens.
+Navigator.push(...) adds a new screen on top.
+Navigator.pop(context) removes the top screen (returns to previous).
+This matches how “back” works on mobile.
+
+Q105. What is named routing and why is it useful?
+A105.
+Named routing uses route strings like '/home', '/details'.
+Benefits: cleaner navigation, centralized route definitions, easier deep-link-like patterns.
+Often used with MaterialApp(routes: {...}) or a router package.
+
+Q106. What is go_router and how is it conceptually different from raw Navigator?
+A106.
+go_router is a declarative routing approach: you define routes, then “go to” paths.
+It simplifies: nested routes, redirection/guards, deep links.
+Mental model: URL/path-based navigation instead of manual push/pop bookkeeping.
+
+Q107. How do you pass data between screens and also return data back?
+A107.
+Pass forward: send arguments when navigating (constructor params or route extras).
+Return back: pop(result) and await the pushed route.
+Exam idea: “Details screen returns selected item to previous screen.”
+
+Q108. What is a Form in Flutter and how does validation usually work?
+A108.
+A Form groups input fields and enables validation/submission.
+Typical pattern:
+GlobalKey<FormState>
+TextFormField(validator: ...)
+formKey.currentState!.validate() before submit
+Common validator outputs: return null if valid, otherwise return an error string.
+
+Q109. What are TextEditingControllers and why must you dispose() them?
+A109.
+Controllers manage and read text field state (controller.text).
+They hold resources/listeners.
+In a StatefulWidget, you should dispose() controllers to prevent memory leaks.
+
+Q110. Explain Flutter layout constraints (why overflow happens).
+A110.
+Layout rule: parent gives constraints → child chooses size → parent positions child.
+Overflow happens when child’s size wants exceed the constraints.
+Common fixes:
+use Expanded/Flexible in Row/Column
+wrap in SingleChildScrollView
+avoid unbounded height issues (e.g., ListView inside Column without constraints).
+
+Q111. Difference between Expanded and Flexible?
+A111.
+Both work in Row/Column to share remaining space.
+Expanded: child must fill the available space (tight fit).
+Flexible: child may be smaller (looser fit), can prevent forced stretching.
+
+Q112. What are Keys in Flutter, and when do you actually need them?
+A112.
+Keys help Flutter preserve widget identity across rebuilds.
+Needed when: lists reorder/insert/remove and you want correct state association.
+Common keys: ValueKey(id), UniqueKey().
+GlobalKey is heavier—use only when you must access widget state/context globally.
+
+Q113. What is BuildContext and what’s a common exam pitfall?
+A113
+BuildContext is a handle to a widget’s location in the widget tree (used for Theme.of, Navigator, Provider.of, etc.).
+Pitfall: using a context that’s no longer valid after an async gap.
+Rule of thumb: after await, ensure the widget is still mounted (if (!mounted) return;).
+
+Q114. Outline the basic steps of making an HTTP GET request and parsing JSON.
+A114.
+Send request (e.g., via http.get(Uri.parse(url))).
+Check status code (success vs failure).
+Decode JSON (jsonDecode).
+Map to a model (fromJson / Result.fromMap).
+In UI: show loading, show data, show error (often via FutureBuilder).
+
+Q115. How do assets/fonts work in Flutter (and what’s the common mistake)?
+A115.
+Assets must be declared in pubspec.yaml under assets: (and fonts under fonts:).
+Access with Image.asset('assets/...') etc.
+Common mistakes: wrong path/indentation in pubspec, forgetting to run flutter pub get.
+
+Q116. Theming + responsiveness + animations: what are the essentials?
+A116.
+Theming: ThemeData, Theme.of(context), consistent colors/typography app-wide.
+Responsiveness: use MediaQuery, LayoutBuilder, and avoid hardcoding sizes.
+Animations:
+Implicit: AnimatedContainer, AnimatedOpacity (easy, declarative).
+Explicit: AnimationController + TickerProvider (more control, more boilerplate).
